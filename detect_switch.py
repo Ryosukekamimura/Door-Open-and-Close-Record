@@ -2,6 +2,8 @@ import RPi.GPIO as GPIO
 import time
 import sys
 import datetime
+import random
+import requests
 
 import pygame.mixer
 
@@ -11,34 +13,42 @@ GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(Sw_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
+def random_number():
+    random_num = random.randrange(1, 9)
+    return random_num
 
-def playMusic(): 
+def playMusic(number):
     pygame.mixer.init()
-    pygame.mixer.music.load("Familymart_music.mp3")
+    filename = "/home/pi/Desktop/MusicVideo/EDM" + str(number) + ".mp3"
+    pygame.mixer.music.load(filename)
     pygame.mixer.music.play(1)
-    time.sleep(9)
+    time.sleep(11)
     pygame.mixer.music.stop()
 
 
+def callback():
+    response = requests.get("http://192.168.0.236:8000/stop")
+
+prev = 0
+two_times_before = 1
 
 
 
 while True:
     try:
         detects_current = GPIO.input(Sw_pin)
+        # Close Door == 0
+        # Open Door == 1
         print(detects_current)
-        
-        # Door Open
-        if detects_current == 0:
-            print(detects_current)
-            playMusic()
-        
-        # Door Not Open
-        elif detects_current == 1:
-            print(detects_current)
-        
-            #print('Now Time: {0}, {1}'.format(datetime.datetime.now(), detects_current))
+        if prev != detects_current:
+            try:
+                callback()
+            except:
+                print("Can't send to MacBookPro")
+            playMusic(random_number())
+        prev = detects_current
         time.sleep(1)
+        
         
     except KeyboardInterrupt:
         GPIO.cleanup()
