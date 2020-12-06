@@ -3,53 +3,87 @@ import time
 import sys
 import datetime
 import random
-import requests
-
 import pygame.mixer
+import sqlite3
 
-Sw_pin = 14
+def setup_database():
+    con = sqlite3.connect('labo.db')
+    with con:
+        con.execute("""
+            CREATE TABLE LABO (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                date TEXT
+            );
+        """)
 
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(Sw_pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
-def random_number():
-    random_num = random.randrange(1, 9)
-    return random_num
+def addDoorOpenData(cnt, date):
+    sql = 'INSERT INTO USER (id, date) values(?,?)'
+    data = [
+        (cnt, date)
+    ]
+    with con:
+        con.executemany(sql, data)
+    # OUTPUT SQL DATA
+    with con:
+        data = con.execute("SELECT * FROM LABO")
+        for row in data:
+            print(row)
 
-def playMusic(number):
+def setup_raspberry():
+    SW_PIN = 14
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(SW_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+# Continue Closing Door for 30 min
+def playMusic():
     pygame.mixer.init()
-    filename = "/home/pi/Desktop/MusicVideo/EDM" + str(number) + ".mp3"
+    filename = "/home/pi/Desktop/MusicVideo/EDM/1.mp3"
     pygame.mixer.music.load(filename)
     pygame.mixer.music.play(1)
     time.sleep(11)
     pygame.mixer.music.stop()
 
+def detect_door():
+    close_count = 0
+    open_count = 0
 
-def callback():
-    response = requests.get("http://192.168.0.236:8000/stop")
+    while True:
+        try:
+            detects_current = GPIO.input(Sw_pin)
+            # Close Door == 0
+            # Open Door == 1
+            CLOSE_DOOR = 0
+            OPEN_DOOR = 1
 
-prev = 0
-two_times_before = 1
+            # CATCH OPEN DOOR
+            if detects_current == OPEN_DOOR:
+                open_count += 1
+                date = str(datetime.datetime.now())
+                addDoorOpenData(open_count, date)
+
+            # CATCH CLOSE DOOR
+            else:
+                close_count += 1
+
+            if close_count == 60*30:
+                playMusic()
+
+            time.sleep(1)
+
+
+        except KeyboardInterrupt:
+            GPIO.cleanup()
+            sys.exit()
 
 
 
-while True:
-    try:
-        detects_current = GPIO.input(Sw_pin)
-        # Close Door == 0
-        # Open Door == 1
-        print(detects_current)
-        if prev != detects_current:
-            try:
-                callback()
-            except:
-                print("Can't send to MacBookPro")
-            playMusic(random_number())
-        prev = detects_current
-        time.sleep(1)
-        
-        
-    except KeyboardInterrupt:
-        GPIO.cleanup()
-        sys.exit()
+# main メソッド
+def main():
+    setup_raspberry()
+    setup_database()
+    detect_door()
+
+if __name__ == "__main__":
+    main()
